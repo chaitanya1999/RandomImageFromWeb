@@ -7,11 +7,12 @@ package randomimagefromweb;
 
 import com.sun.glass.events.KeyEvent;
 import java.awt.BorderLayout;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
@@ -19,7 +20,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.file.Files;
-import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Random;
@@ -27,17 +27,12 @@ import javax.swing.Timer;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javafx.application.Platform;
-import javafx.scene.image.Image;
-import javax.imageio.ImageIO;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -56,12 +51,25 @@ public class frame extends javax.swing.JFrame {
     Random random = new Random();
     boolean resizing=false;
     ArrayList<String> imgurls = new ArrayList<>();
-    JLabel imageView = null;
+    MyJLabel imageView = null;
     String USER_AGENT="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36";
     boolean loadingYet = false;
     
+    boolean imageDebug = false;
+    
     File curImage=null;
     static HashSet<String> downloadedFiles = new HashSet<>();
+    
+    static class MyJLabel extends JLabel{
+        public double sx=1.0,sy=1.0;
+        @Override
+        public void paint(Graphics g){
+            Graphics2D gg = (Graphics2D) g;
+            gg.scale(sx, sy);
+            super.paint(g);
+        }
+    }
+    
     
     Timer timer = new Timer(400, new ActionListener() {
         @Override
@@ -76,8 +84,12 @@ public class frame extends javax.swing.JFrame {
     
     public frame() {
         initComponents();
-        imageView = new JLabel();
-        getContentPane().add(imageView,BorderLayout.CENTER);
+        imageView = new MyJLabel();
+        imgContainer.setLayout(new BorderLayout());
+        imgContainer.add(imageView,BorderLayout.CENTER);
+        
+        imageView.setHorizontalAlignment(JLabel.LEFT);
+        imageView.setVerticalAlignment(JLabel.TOP);
         
         
         
@@ -106,6 +118,15 @@ public class frame extends javax.swing.JFrame {
         } catch (Exception e) {
             System.out.println(e);
         }
+        
+        
+        
+        if(imageDebug){
+            curImage = new File("C:\\Users\\Chaitanya V\\Documents\\mario.gif");
+            loadImageInImageView();
+            System.out.println("debug image");
+        }
+        
     }
     
     
@@ -122,6 +143,7 @@ public class frame extends javax.swing.JFrame {
         jTextField1 = new javax.swing.JTextField();
         jButton1 = new javax.swing.JButton();
         curImageUrl = new javax.swing.JTextField();
+        imgContainer = new javax.swing.JPanel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setAlwaysOnTop(true);
@@ -167,7 +189,13 @@ public class frame extends javax.swing.JFrame {
         getContentPane().add(jButton1, java.awt.BorderLayout.LINE_END);
 
         curImageUrl.setEditable(false);
+        curImageUrl.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                curImageUrlMouseClicked(evt);
+            }
+        });
         getContentPane().add(curImageUrl, java.awt.BorderLayout.PAGE_END);
+        getContentPane().add(imgContainer, java.awt.BorderLayout.CENTER);
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
@@ -226,6 +254,7 @@ public class frame extends javax.swing.JFrame {
 
     private void formComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_formComponentResized
         timer.restart();
+//        System.out.println("# " + imageView.getWidth() + " " + imageView.getHeight());
     }//GEN-LAST:event_formComponentResized
 
     private void jTextField1KeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTextField1KeyReleased
@@ -287,7 +316,7 @@ public class frame extends javax.swing.JFrame {
     }//GEN-LAST:event_jTextField1KeyReleased
 
     private void formPropertyChange(java.beans.PropertyChangeEvent evt) {//GEN-FIRST:event_formPropertyChange
-
+        
     }//GEN-LAST:event_formPropertyChange
 
     private void formMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_formMousePressed
@@ -297,6 +326,10 @@ public class frame extends javax.swing.JFrame {
     private void formMouseReleased(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_formMouseReleased
         
     }//GEN-LAST:event_formMouseReleased
+
+    private void curImageUrlMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_curImageUrlMouseClicked
+        System.out.println(curImageUrl.getText());
+    }//GEN-LAST:event_curImageUrlMouseClicked
 
     /**
      * @param args the command line arguments
@@ -318,18 +351,28 @@ public class frame extends javax.swing.JFrame {
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JTextField curImageUrl;
+    private javax.swing.JPanel imgContainer;
     private javax.swing.JButton jButton1;
     private javax.swing.JTextField jTextField1;
     // End of variables declaration//GEN-END:variables
 
     private void loadImageInImageView() {
-        try {
-            imageView.setIcon(new ImageIcon(ImageIO.read(curImage.getAbsoluteFile()).getScaledInstance(imageView.getWidth(), imageView.getHeight(), java.awt.Image.SCALE_DEFAULT)));
-            imageView.getIcon().paintIcon(this, imageView.getGraphics(), 100, 100);
-            repaint();
+            ImageIcon ic = new ImageIcon(curImage.getAbsolutePath());
+            
+            
+            
+            int width = imgContainer.getWidth();
+            int height = imgContainer.getHeight();
+            
+            double sx = (width*1.0)/ic.getIconWidth();
+            double sy = (height*1.0)/ic.getIconHeight();
+            
+            
+            (imageView).sx=sx;
+            (imageView).sy=sy;
+            
+            imageView.setIcon(ic);
+//            repaint();
             loadingYet=false;
-        } catch (IOException ex) {
-            Logger.getLogger(frame.class.getName()).log(Level.SEVERE, null, ex);
-        }
     }
 }
