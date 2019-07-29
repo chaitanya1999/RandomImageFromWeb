@@ -7,6 +7,8 @@ package randomimagefromweb;
 
 import com.sun.glass.events.KeyEvent;
 import java.awt.BorderLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -17,15 +19,24 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Random;
+import javax.swing.Timer;
+
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javafx.application.Platform;
 import javafx.scene.image.Image;
+import javax.imageio.ImageIO;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import javax.swing.ImageIcon;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import org.json.simple.JSONObject;
@@ -43,21 +54,32 @@ import org.jsoup.select.Elements;
 public class frame extends javax.swing.JFrame {
 
     Random random = new Random();
+    boolean resizing=false;
     ArrayList<String> imgurls = new ArrayList<>();
-    SwingFXImageView imgView = null;
+    JLabel imageView = null;
     String USER_AGENT="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36";
+    boolean loadingYet = false;
     
     File curImage=null;
+    static HashSet<String> downloadedFiles = new HashSet<>();
+    
+    Timer timer = new Timer(400, new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            //sfxWebView.imageview.setFitHeight(imageView.getHeight());
+            //sfxWebView.imageview.setFitWidth(imageView.getWidth());
+            if (curImage != null && !loadingYet) {
+                loadImageInImageView();
+            }
+        }
+    });
     
     public frame() {
         initComponents();
-        imgView = new SwingFXImageView();
-        getContentPane().add(imgView,BorderLayout.CENTER);
+        imageView = new JLabel();
+        getContentPane().add(imageView,BorderLayout.CENTER);
         
-        SwingUtilities.invokeLater(()->{
-            imgView.imageview.setFitHeight(imgView.getHeight());
-            imgView.imageview.setFitWidth(imgView.getWidth());
-        });
+        
         
         TrustManager[] trustAllCerts = new TrustManager[]{
             new X509TrustManager() {
@@ -104,6 +126,14 @@ public class frame extends javax.swing.JFrame {
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setAlwaysOnTop(true);
         setMaximumSize(new java.awt.Dimension(400, 300));
+        addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mousePressed(java.awt.event.MouseEvent evt) {
+                formMousePressed(evt);
+            }
+            public void mouseReleased(java.awt.event.MouseEvent evt) {
+                formMouseReleased(evt);
+            }
+        });
         addComponentListener(new java.awt.event.ComponentAdapter() {
             public void componentResized(java.awt.event.ComponentEvent evt) {
                 formComponentResized(evt);
@@ -145,27 +175,42 @@ public class frame extends javax.swing.JFrame {
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         int ri = random.nextInt(imgurls.size());
         try {
+            loadingYet=true;
             String url = imgurls.get(ri);
             curImageUrl.setText(url);
             
             String filename = url.substring(Math.max(url.lastIndexOf('/'),url.length()-100)+1);
             int lastIndex=-1;
             if((lastIndex=filename.lastIndexOf('.'))>=0)filename=new StringBuilder(filename).replace(lastIndex, lastIndex+1, "-").toString();
-            filename.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
+            
+            
+            StringBuilder sb = new StringBuilder("");
+            String illegalChars = "<>:\"/\\|?*";
+            for(char c:filename.toCharArray()){
+                if(illegalChars.contains(""+c)){
+                    sb.append("_");
+                } else sb.append(c);
+            }
+            filename = sb.toString();
+            
+            
             File file = new File("./Images/"+filename);
             file.getParentFile().mkdirs();
             
             System.out.println("imagefile = " + filename);
             
+            if(!downloadedFiles.contains(filename)){
+                HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                c.addRequestProperty("User-Agent", USER_AGENT);
+                Files.copy(c.getInputStream(), file.toPath());
+                downloadedFiles.add(filename);
+            }
             
-            HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-            c.addRequestProperty("User-Agent", USER_AGENT);
-            
-            Files.copy(c.getInputStream(), file.toPath());
-            Image img = new Image(new FileInputStream(curImage = file.getAbsoluteFile()));
+            try(FileInputStream fis = new FileInputStream(curImage = file.getAbsoluteFile())){
+                loadImageInImageView();
+            } finally{}
             System.out.println("displayed");
             
-            imgView.imageview.setImage(img);
             System.out.println("soft loaded");
         } catch (MalformedURLException ex) {
             Logger.getLogger(frame.class.getName()).log(Level.SEVERE, null, ex);
@@ -180,22 +225,12 @@ public class frame extends javax.swing.JFrame {
     }//GEN-LAST:event_formWindowClosing
 
     private void formComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_formComponentResized
-        SwingUtilities.invokeLater(()->{
-            imgView.imageview.setFitHeight(imgView.getHeight());
-            imgView.imageview.setFitWidth(imgView.getWidth());
-            if (curImage != null) {
-                try {
-                    Image img = new Image(new FileInputStream(curImage.getAbsoluteFile()));
-                    imgView.imageview.setImage(img);
-                } catch (FileNotFoundException ex) {
-                    Logger.getLogger(frame.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            }
-        });
+        timer.restart();
     }//GEN-LAST:event_formComponentResized
 
     private void jTextField1KeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTextField1KeyReleased
         if(evt.getKeyCode()==KeyEvent.VK_ENTER){
+            loadingYet=true;
             String searchQuery = jTextField1.getText();
 
             System.out.println("searchquery = " + searchQuery);
@@ -210,7 +245,7 @@ public class frame extends javax.swing.JFrame {
 
                 HttpURLConnection.setFollowRedirects(true);
 
-                Document doc = Jsoup.connect("https://www.google.com/search?safe=images&tbs=itp:animated&tbm=isch&source=lnms&q=" + searchQuery)
+                Document doc = Jsoup.connect("https://www.google.com/search?tbs=itp:animated&tbm=isch&source=lnms&q=" + searchQuery)
                         .userAgent(USER_AGENT)
                         .get();
 
@@ -255,6 +290,14 @@ public class frame extends javax.swing.JFrame {
 
     }//GEN-LAST:event_formPropertyChange
 
+    private void formMousePressed(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_formMousePressed
+        
+    }//GEN-LAST:event_formMousePressed
+
+    private void formMouseReleased(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_formMouseReleased
+        
+    }//GEN-LAST:event_formMouseReleased
+
     /**
      * @param args the command line arguments
      */
@@ -278,4 +321,15 @@ public class frame extends javax.swing.JFrame {
     private javax.swing.JButton jButton1;
     private javax.swing.JTextField jTextField1;
     // End of variables declaration//GEN-END:variables
+
+    private void loadImageInImageView() {
+        try {
+            imageView.setIcon(new ImageIcon(ImageIO.read(curImage.getAbsoluteFile()).getScaledInstance(imageView.getWidth(), imageView.getHeight(), java.awt.Image.SCALE_DEFAULT)));
+            imageView.getIcon().paintIcon(this, imageView.getGraphics(), 100, 100);
+            repaint();
+            loadingYet=false;
+        } catch (IOException ex) {
+            Logger.getLogger(frame.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
 }
