@@ -9,14 +9,15 @@ import com.sun.glass.events.KeyEvent;
 import java.awt.BorderLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.file.Files;
@@ -29,8 +30,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
 import javax.swing.UIManager;
@@ -48,72 +47,63 @@ import org.jsoup.select.Elements;
  */
 public class frame extends javax.swing.JFrame {
 
-    Random random = new Random();
-    boolean resizing=false;
     ArrayList<String> imgurls = new ArrayList<>();
-    MyJLabel imageView = null;
-    String USER_AGENT="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36";
-    boolean loadingYet = false;
+    int imageIndex=0;
     
-    boolean imageDebug = false;
+    
+    ImageView imageView = null;
+    String USER_AGENT="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36";
+    
+    boolean loadingYet = false;    
+    boolean imageDebug = true;
     
     File curImage=null;
-    static HashSet<String> downloadedFiles = new HashSet<>();
+    static HashSet<String> downloadedUrls = new HashSet<>();
     
-    static class MyJLabel extends JLabel{
+    static class ImageView extends JLabel{
         public double sx=1.0,sy=1.0;
+        
         @Override
         public void paint(Graphics g){
             Graphics2D gg = (Graphics2D) g;
+            
+            if(sx<sy)sy=sx;
+            else sx=sy;
+            
             gg.scale(sx, sy);
             super.paint(g);
+        }
+        
+        @Override
+        public ImageIcon getIcon(){
+            return (ImageIcon)super.getIcon();
         }
     }
     
     
-    Timer timer = new Timer(400, new ActionListener() {
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            //sfxWebView.imageview.setFitHeight(imageView.getHeight());
-            //sfxWebView.imageview.setFitWidth(imageView.getWidth());
-            if (curImage != null && !loadingYet) {
-                loadImageInImageView();
-            }
-        }
-    });
-    
+//    Timer timer = new Timer(100, new ActionListener() {
+//        @Override
+//        public void actionPerformed(ActionEvent e) {
+//            if (curImage != null && !loadingYet) {
+//                loadImageInImageView();
+//                timer.stop();
+//            }
+//        }
+//    });
+//    
     public frame() {
         initComponents();
-        imageView = new MyJLabel();
+        imageView = new ImageView();
         imgContainer.setLayout(new BorderLayout());
         imgContainer.add(imageView,BorderLayout.CENTER);
         
         imageView.setHorizontalAlignment(JLabel.LEFT);
         imageView.setVerticalAlignment(JLabel.TOP);
         
-        
-        
-        TrustManager[] trustAllCerts = new TrustManager[]{
-            new X509TrustManager() {
 
-                public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                    return null;
-                }
-
-                public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {
-                    //No need to implement.
-                }
-
-                public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {
-                    //No need to implement.
-                }
-            }
-        };
-
-// Install the all-trusting trust manager
         try {
             SSLContext sc = SSLContext.getInstance("SSL");
-            sc.init(null, trustAllCerts, new java.security.SecureRandom());
+            sc.init(null, Tools.trustAllCerts, new java.security.SecureRandom());
             HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
         } catch (Exception e) {
             System.out.println(e);
@@ -122,7 +112,14 @@ public class frame extends javax.swing.JFrame {
         
         
         if(imageDebug){
-            curImage = new File("C:\\Users\\Chaitanya V\\Documents\\mario.gif");
+            curImage = new File("Images/18186421-gif");
+//            try {
+//                URL url = frame.class.getClassLoader().getResource("res/mario.gif");
+//                curImage = new File(url.toURI());
+//            } catch (URISyntaxException ex) {
+//                Logger.getLogger(frame.class.getName()).log(Level.SEVERE, null, ex);
+//            }
+//            
             loadImageInImageView();
             System.out.println("debug image");
         }
@@ -146,6 +143,7 @@ public class frame extends javax.swing.JFrame {
         imgContainer = new javax.swing.JPanel();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setTitle("Random Image From Web");
         setAlwaysOnTop(true);
         setMaximumSize(new java.awt.Dimension(400, 300));
         addMouseListener(new java.awt.event.MouseAdapter() {
@@ -201,50 +199,37 @@ public class frame extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-        int ri = random.nextInt(imgurls.size());
-        try {
+        imageIndex = (imageIndex+1)%imgurls.size();
             loadingYet=true;
-            String url = imgurls.get(ri);
+            String url = imgurls.get(imageIndex);
             curImageUrl.setText(url);
             
-            String filename = url.substring(Math.max(url.lastIndexOf('/'),url.length()-100)+1);
-            int lastIndex=-1;
-            if((lastIndex=filename.lastIndexOf('.'))>=0)filename=new StringBuilder(filename).replace(lastIndex, lastIndex+1, "-").toString();
-            
-            
-            StringBuilder sb = new StringBuilder("");
-            String illegalChars = "<>:\"/\\|?*";
-            for(char c:filename.toCharArray()){
-                if(illegalChars.contains(""+c)){
-                    sb.append("_");
-                } else sb.append(c);
-            }
-            filename = sb.toString();
-            
+            String filename = Tools.urlToFilename(url);
             
             File file = new File("./Images/"+filename);
             file.getParentFile().mkdirs();
             
             System.out.println("imagefile = " + filename);
             
-            if(!downloadedFiles.contains(filename)){
+        try {
+            //CHANGE HERE USE URL INSTEAD OF FILENAME IN HASH SET RIGHT,!!XD :p
+            if(!downloadedUrls.contains(url)){
                 HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
                 c.addRequestProperty("User-Agent", USER_AGENT);
                 Files.copy(c.getInputStream(), file.toPath());
-                downloadedFiles.add(filename);
+                downloadedUrls.add(url);
             }
-            
-            try(FileInputStream fis = new FileInputStream(curImage = file.getAbsoluteFile())){
-                loadImageInImageView();
-            } finally{}
-            System.out.println("displayed");
-            
-            System.out.println("soft loaded");
         } catch (MalformedURLException ex) {
             Logger.getLogger(frame.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
             Logger.getLogger(frame.class.getName()).log(Level.SEVERE, null, ex);
         }
+        
+        
+        curImage = file;
+        loadImageInImageView();
+        System.out.println("displayed, soft loaded");
+        
         
     }//GEN-LAST:event_jButton1ActionPerformed
 
@@ -253,8 +238,8 @@ public class frame extends javax.swing.JFrame {
     }//GEN-LAST:event_formWindowClosing
 
     private void formComponentResized(java.awt.event.ComponentEvent evt) {//GEN-FIRST:event_formComponentResized
-        timer.restart();
-//        System.out.println("# " + imageView.getWidth() + " " + imageView.getHeight());
+//        timer.restart();
+        setImageAndRescaleView(imageView.getIcon());
     }//GEN-LAST:event_formComponentResized
 
     private void jTextField1KeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_jTextField1KeyReleased
@@ -357,22 +342,24 @@ public class frame extends javax.swing.JFrame {
     // End of variables declaration//GEN-END:variables
 
     private void loadImageInImageView() {
-            ImageIcon ic = new ImageIcon(curImage.getAbsolutePath());
-            
-            
-            
-            int width = imgContainer.getWidth();
-            int height = imgContainer.getHeight();
-            
-            double sx = (width*1.0)/ic.getIconWidth();
-            double sy = (height*1.0)/ic.getIconHeight();
-            
-            
-            (imageView).sx=sx;
-            (imageView).sy=sy;
-            
-            imageView.setIcon(ic);
-//            repaint();
-            loadingYet=false;
+        ImageIcon ic = null;
+//            if(!curImage.getAbsolutePath().equals(imageView.imagePath))
+//                ic = new ImageIcon(Tools.readImgFromFile(curImage.getAbsolutePath()));
+        ic = new ImageIcon(Toolkit.getDefaultToolkit().createImage(curImage.getAbsolutePath()));
+        setImageAndRescaleView(ic);
+        loadingYet = false;
+    }
+    
+    private void setImageAndRescaleView(ImageIcon ic){
+        int width = imgContainer.getWidth();
+        int height = imgContainer.getHeight();
+
+        double sx = (width * 1.0) / ic.getIconWidth();
+        double sy = (height * 1.0) / ic.getIconHeight();
+
+        imageView.sx = sx;
+        imageView.sy = sy;
+
+        imageView.setIcon(ic);
     }
 }
